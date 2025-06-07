@@ -34,7 +34,7 @@ app.post('/api/mensagens', (req, res) => {
 });
 
 // Configura o servidor WebSocket na porta 8081
-const wss = new WebSocket.Server({ server }, () => {
+const wss = new WebSocket.Server({ port: process.env.PORT }, () => {
   console.log('Servidor WebSocket rodando');
 });
 wss.on('connection', (ws) => {
