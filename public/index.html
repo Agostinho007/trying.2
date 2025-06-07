@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Simples</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Chat Simples</h1>
+    <div id="mensagens" class="mensagens"></div>
+    <form id="form-chat" onsubmit="sendMessage(event)">
+      <input type="text" id="msg" placeholder="Digite sua mensagem" required>
+      <button type="submit">Enviar</button>
+    </form>
+  </div>
+
+  <script>
+    // Solicita o nome do usuário no início
+    let usuario = prompt('Digite seu nome:');
+    while (!usuario || usuario.trim() === '') {
+      usuario = prompt('Por favor, digite um nome válido:');
+    }
+    usuario = usuario.trim();
+
+    // Função para formatar a data
+    function formatDate(isoString) {
+      const date = new Date(isoString);
+      return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')} - ${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+    }
+
+    // Conecta ao WebSocket com tratamento de erro
+    const ws = new WebSocket('ws://localhost:8081');
+    ws.onopen = () => {
+      console.log('Conectado ao WebSocket');
+      document.getElementById('mensagens').innerHTML += '<p class="info">Conectado ao chat!</p>';
+    };
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      const mensagensDiv = document.getElementById('mensagens');
+      if (data.tipo === 'mensagem') {
+        mensagensDiv.innerHTML += `<p><strong>${data.usuario}</strong> (${formatDate(data.timestamp)}): ${data.conteudo}</p>`;
+        mensagensDiv.scrollTop = mensagensDiv.scrollHeight;
+      } else if (data.tipo === 'bem-vindo') {
+        mensagensDiv.innerHTML += `<p class="info">${data.mensagem}</p>`;
+      }
+    };
+    ws.onerror = (error) => {
+      console.error('Erro no WebSocket:', error);
+      document.getElementById('mensagens').innerHTML += '<p class="error">Erro: Não foi possível conectar ao chat. Verifique o servidor.</p>';
+    };
+    ws.onclose = () => {
+      document.getElementById('mensagens').innerHTML += '<p class="error">Conexão com o chat perdida.</p>';
+    };
+
+    // Carrega histórico de mensagens
+    fetch('/api/mensagens')
+      .then(res => {
+        if (!res.ok) throw new Error('Erro ao carregar mensagens');
+        return res.json();
+      })
+      .then(data => {
+        const mensagensDiv = document.getElementById('mensagens');
+        mensagensDiv.innerHTML = data.map(msg => `<p><strong>${msg.usuario}</strong> (${formatDate(msg.timestamp)}): ${msg.conteudo}</p>`).join('');
+        mensagensDiv.scrollTop = mensagensDiv.scrollHeight;
+      })
+      .catch(err => {
+        console.error('Erro:', err);
+        document.getElementById('mensagens').innerHTML += '<p class="error">Erro ao carregar histórico.</p>';
+      });
+
+    // Envia mensagem
+    function sendMessage(event) {
+      event.preventDefault();
+      const msg = document.getElementById('msg').value.trim();
+      if (!msg) return;
+      fetch('/api/mensagens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conteudo: msg, usuario })
+      })
+        .then(res => {
+          if (!res.ok) throw new Error('Erro ao enviar mensagem');
+          document.getElementById('msg').value = '';
+        })
+        .catch(err => {
+          console.error('Erro:', err);
+          document.getElementById('mensagens').innerHTML += '<p class="error">Erro ao enviar mensagem.</p>';
+        });
+      ws.send(JSON.stringify({ conteudo: msg, usuario }));
+    }
+  </script>
+</body>
+</html>
